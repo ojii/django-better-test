@@ -20,7 +20,7 @@ def suite_to_labels(suite):
     """
     return [
         '{}.{}.{}'.format(
-            test.__class__.__module__,
+            test.__class__.__module__.split('.')[0],
             test.__class__.__name__,
             test._testMethodName
         ) for test in suite._tests
@@ -33,8 +33,15 @@ def multi_processing_runner_factory(stream):
     overwriting the output stream.
     """
     def inner(*args, **kwargs):
-        kwargs['resultclass'] = MultiProcessingTestResult
-        kwargs['stream'] = stream
+        args = list(args)
+        if len(args) > 0:
+            args[0] = stream
+        else:
+            kwargs['stream'] = stream
+        if len(args) > 5:
+            args[5] = MultiProcessingTestResult
+        else:
+            kwargs['resultclass'] = MultiProcessingTestResult
         return unittest.TextTestRunner(*args, **kwargs)
     return inner
 
@@ -60,9 +67,17 @@ def run_tests(labels, runner_class, runner_options):
     """
     try:
         with null_stdout() as nullout:
-            runner = runner_class(**runner_options)
-            runner.test_runner = multi_processing_runner_factory(nullout)
+            real_runner_class = type(
+                runner_class.__name__,
+                (MultiProcessingTestRunner, runner_class),
+                {'test_runner': multi_processing_runner_factory(nullout)}
+            )
+            runner = real_runner_class(**runner_options)
             runner.run_tests(labels)
+    except:
+        import traceback
+        traceback.print_exc()
+        raise
     finally:
         COUNTER.value -= 1
 
@@ -95,10 +110,9 @@ def wait_for_tests_to_finish(real_result, task_counter, results_queue):
         method(fake_test, *arglist)
     while task_counter.value != 0:
         try:
-            result = results_queue.get_nowait()
+            handle(results_queue.get_nowait())
         except queue.Empty:
             continue
-        handle(result)
     while not results_queue.empty():
         handle(results_queue.get_nowait())
 
@@ -116,7 +130,7 @@ class Command(DjangoTest):
     def handle(self, *test_labels, **options):
         # if we're not doing anything fancy, let Django handle this.
         if not any([options['parallel'], options['isolate']]):
-            super(Command, self).handle(*test_labels, **options)
+            return super(Command, self).handle(*test_labels, **options)
 
         from django.conf import settings
         from django.test.utils import get_runner
@@ -199,7 +213,7 @@ class Command(DjangoTest):
 
         # Report result, this is mostly taken from TextTestRunner.run
         test_count = len(all_test_labels)
-        time_taken = end_time - start_time # "{:10.4f}".format(x)
+        time_taken = end_time - start_time
 
         real_result.printErrors()
         real_result.stream.writeln(real_result.separator2)
@@ -344,3 +358,16 @@ class FakeTest(object):
 
     def shortDescription(self):
         return self.description
+
+
+class MultiProcessingTestRunner(object):
+    test_runner = unittest.TextTestRunner
+
+    def run_suite(self, suite, **kwargs):
+        """
+        Backport from Django 1.7
+        """
+        return self.test_runner(
+            verbosity=self.verbosity,
+            failfast=self.failfast,
+        ).run(suite)
