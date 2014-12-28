@@ -9,6 +9,10 @@ import time
 
 from django.core.management.commands.test import Command as DjangoTest
 
+from better_test.database import read_database
+from better_test.database import simple_weighted_partition
+from better_test.database import write_database
+
 COUNTER = None
 QUEUE = None
 
@@ -20,7 +24,7 @@ def suite_to_labels(suite):
     """
     return [
         '{}.{}.{}'.format(
-            test.__class__.__module__.split('.')[0],
+            test.__class__.__module__,
             test.__class__.__name__,
             test._testMethodName
         ) for test in suite._tests
@@ -105,7 +109,7 @@ def wait_for_tests_to_finish(real_result, task_counter, results_queue):
         method_name, args = result
         arglist = list(args)
         test_info = arglist.pop(0)
-        fake_test = FakeTest(*test_info)
+        fake_test = FakeTest.deserialize(test_info)
         method = getattr(real_result, method_name)
         method(fake_test, *arglist)
     while task_counter.value != 0:
@@ -115,6 +119,18 @@ def wait_for_tests_to_finish(real_result, task_counter, results_queue):
             continue
     while not results_queue.empty():
         handle(results_queue.get_nowait())
+
+
+def serialize(test):
+    return (
+        '{}.{}.{}'.format(
+            test.__class__.__module__,
+            test.__class__.__name__,
+            test._testMethodName,
+        ),
+        str(test),
+        test.shortDescription()
+    )
 
 
 class Command(DjangoTest):
@@ -157,27 +173,29 @@ class Command(DjangoTest):
         if not all_test_labels:
             return super(Command, self).handle(*test_labels, **options)
 
+        database = read_database()
+
         if options['isolate']:
             # Isolate means one test (label) per task process.
-            chunks = [[label] for label in all_test_labels]
+            chunks = [
+                [label] for label in all_test_labels
+            ]
         else:
             # Try to distribute the test labels equally across the available
             # CPU cores
             chunk_count = multiprocessing.cpu_count()
-            chunk_size = int(float(len(all_test_labels)) / chunk_count)
-            if chunk_size == 0:
-                chunk_size = 1
-            chunks = [
-                all_test_labels[index: index + chunk_size]
-                for index in
-                range(0, (chunk_count - 1) * chunk_size, chunk_size)
+            weighted_chunks = [
+                (database.get('timings', {}).get(label, 0), label)
+                for label in all_test_labels
             ]
-            chunks.append(all_test_labels[(chunk_count - 1) * chunk_size:])
-            if chunk_size == 1:
-                chunks = list(filter(bool, chunks))
+            # Try to split the tests into chunks of equal time, not equal size
+            chunks = simple_weighted_partition(weighted_chunks, chunk_count)
+
+            # filter empty chunks
+            chunks = list(filter(bool, chunks))
 
         # Initialize shared values
-        task_count = len(chunks)
+        task_count = len(weighted_chunks)
         task_counter = multiprocessing.Value('i', task_count)
         results_queue = multiprocessing.Queue()
 
@@ -247,6 +265,15 @@ class Command(DjangoTest):
         else:
             real_result.stream.write("\n")
 
+        # record timings to database
+        data = {
+            'timings': database.get('timings', {}),
+        }
+        for test, timing in real_result.timings.items():
+            data['timings'][test] = timing
+
+        write_database(data)
+
         return_code = len(real_result.failures) + len(real_result.errors)
         sys.exit(return_code)
 
@@ -257,6 +284,13 @@ class MultiProcessingTextTestResult(unittest.TextTestResult):
     so _exc_info_to_string is handled in MultiProcessingTestResult and the
     result sent to this as `err`.
     """
+    def __init__(self, *args, **kwargs):
+        super(MultiProcessingTextTestResult, self).__init__(*args, **kwargs)
+        self.timings = {}
+
+    def registerTiming(self, test, timing):
+        self.timings[test.qualname] = timing
+
     def _exc_info_to_string(self, err, test):
         return err
 
@@ -271,11 +305,15 @@ class MultiProcessingTestResult(unittest.TestResult):
     pickleable. Also note that exceptions are transformed to strings in the
     task as they're not picklable.
     """
+    def __init__(self, *args, **kwargs):
+        super(MultiProcessingTestResult, self).__init__(*args, **kwargs)
+        self._timings = {}
+
     def printErrors(self):
         pass
 
     def startTest(self, test):
-        pass
+        self._timings[test] = time.time()
 
     def _setupStdout(self):
         pass
@@ -284,7 +322,12 @@ class MultiProcessingTestResult(unittest.TestResult):
         pass
 
     def stopTest(self, test):
-        pass
+        QUEUE.put((
+            'registerTiming', (
+                serialize(test),
+                time.time() - self._timings[test],
+            )
+        ))
 
     def _restoreStdout(self):
         pass
@@ -296,7 +339,7 @@ class MultiProcessingTestResult(unittest.TestResult):
         safe_err = self._exc_info_to_string(err, test)
         QUEUE.put((
             'addError', (
-                (str(test), test.shortDescription()),
+                serialize(test),
                 safe_err
             )
         ))
@@ -305,7 +348,7 @@ class MultiProcessingTestResult(unittest.TestResult):
         safe_err = self._exc_info_to_string(err, test)
         QUEUE.put((
             'addFailure', (
-                (str(test), test.shortDescription()),
+                serialize(test),
                 safe_err
             )
         ))
@@ -313,14 +356,14 @@ class MultiProcessingTestResult(unittest.TestResult):
     def addSuccess(self, test):
         QUEUE.put((
             'addSuccess', (
-                (str(test), test.shortDescription()),
+                serialize(test),
             )
         ))
 
     def addSkip(self, test, reason):
         QUEUE.put((
             'addSkip', (
-                (str(test), test.shortDescription()),
+                serialize(test),
             )
         ))
 
@@ -328,7 +371,7 @@ class MultiProcessingTestResult(unittest.TestResult):
         safe_err = self._exc_info_to_string(err, test)
         QUEUE.put((
             'addExpectedFailure', (
-                (str(test), test.shortDescription()),
+                serialize(test),
                 safe_err
             )
         ))
@@ -336,7 +379,7 @@ class MultiProcessingTestResult(unittest.TestResult):
     def addUnexpectedSuccess(self, test):
         QUEUE.put((
             'addUnexpectedSuccess', (
-                (str(test), test.shortDescription()),
+                serialize(test),
             )
         ))
 
@@ -349,9 +392,14 @@ class FakeTest(object):
     Object faking to be a test case. All the test runner/result need are
     __str__ and shortDescription, so that's all that is provided.
     """
-    def __init__(self, name, description):
+    def __init__(self, qualname, name, description):
+        self.qualname = qualname
         self.name = name
         self.description = description
+
+    @classmethod
+    def deserialize(cls, data):
+        return cls(*data)
 
     def __str__(self):
         return self.name
