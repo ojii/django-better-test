@@ -13,7 +13,6 @@ from better_test.database import read_database
 from better_test.database import simple_weighted_partition
 from better_test.database import write_database
 
-COUNTER = None
 QUEUE = None
 
 
@@ -82,22 +81,19 @@ def run_tests(labels, runner_class, runner_options):
         import traceback
         traceback.print_exc()
         raise
-    finally:
-        COUNTER.value -= 1
 
 
-def init_task(task_counter, result_queue):
+def init_task(result_queue):
     """
     Initialize task process. multiprocessing.Value and multiprocessing.Queue
     can't be sent via multiprocssing.Pool.apply_async, so have to be
     initialized by this (as globals unfortunately).
     """
-    global COUNTER, QUEUE
-    COUNTER = task_counter
+    global QUEUE
     QUEUE = result_queue
 
 
-def wait_for_tests_to_finish(real_result, task_counter, results_queue):
+def wait_for_tests_to_finish(real_result, async_results, results_queue):
     """
     Waits for all tasks to finish by checking if task_counter is zero. Whenever
     a task (run_tests) finishes, it decrements the counter.
@@ -112,7 +108,15 @@ def wait_for_tests_to_finish(real_result, task_counter, results_queue):
         fake_test = FakeTest.deserialize(test_info)
         method = getattr(real_result, method_name)
         method(fake_test, *arglist)
-    while task_counter.value != 0:
+
+    def get_remaining_results():
+        return filter(
+            lambda result: not result.ready(), async_results
+        )
+
+    remaining_results = get_remaining_results()
+    while any(remaining_results):
+        remaining_results = get_remaining_results()
         try:
             handle(results_queue.get_nowait())
         except queue.Empty:
@@ -195,24 +199,23 @@ class Command(DjangoTest):
             chunks = list(filter(bool, chunks))
 
         # Initialize shared values
-        task_count = len(weighted_chunks)
-        task_counter = multiprocessing.Value('i', task_count)
         results_queue = multiprocessing.Queue()
 
         # Initialize pool
         pool = multiprocessing.Pool(
             initializer=init_task,
-            initargs=(task_counter, results_queue)
+            initargs=(results_queue,)
         )
 
         start_time = time.time()
 
         # Send tasks to pool
+        async_results = []
         for chunk in chunks:
-            pool.apply_async(
+            async_results.append(pool.apply_async(
                 run_tests,
                 (chunk, TestRunner, options)
-            )
+            ))
 
         # Get an actual result class we can use
         pseudo_runner = unittest.TextTestRunner(
@@ -221,7 +224,7 @@ class Command(DjangoTest):
         real_result = pseudo_runner._makeResult()
 
         # Wait for results to come in
-        wait_for_tests_to_finish(real_result, task_counter, results_queue)
+        wait_for_tests_to_finish(real_result, async_results, results_queue)
 
         # Stop all tasks
         pool.close()
