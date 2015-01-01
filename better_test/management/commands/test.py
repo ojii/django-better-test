@@ -2,10 +2,13 @@ from contextlib import contextmanager
 from optparse import make_option
 import multiprocessing
 import os
-import queue
 import unittest
 import sys
 import time
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 from django.core.management.commands.test import Command as DjangoTest
 
