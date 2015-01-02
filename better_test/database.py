@@ -6,7 +6,9 @@ import os
 def simple_weighted_partition(weighted_data, partitions):
     results = [list() for _ in range(partitions)]
     sorted_data = reversed(sorted(weighted_data))
-    index_iter = itertools.cycle(range(partitions))
+    index_iter = itertools.cycle(
+        itertools.chain(range(partitions), reversed(range(partitions)))
+    )
     for weight, value in sorted_data:
         results[next(index_iter)].append(value)
     return results
