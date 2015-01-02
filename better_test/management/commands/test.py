@@ -269,6 +269,41 @@ class Command(DjangoTest):
         ))
         real_result.stream.writeln()
 
+        # Record timings to database
+        data = {
+            'timings': database.get('timings', {}),
+        }
+        for test, timing in real_result.timings.items():
+            data['timings'][test] = timing
+
+        # Record failed tests to database
+        data['failed'] = [
+            test.qualname for test, _ in itertools.chain(
+                real_result.failures,
+                real_result.errors,
+                [(test, None) for test in real_result.unexpectedSuccesses]
+            )
+        ]
+
+        # Record config to database
+        data['last_run'] = {
+            'isolate': options['isolate'],
+            'parallel': options['parallel'],
+            'list_slow': options['list_slow'],
+            'labels': all_test_labels,
+        }
+
+        # Show slowest tests
+        if options['list_slow']:
+            real_result.stream.writeln("Slowest tests:")
+            slowest = sorted(
+                ((timing, test) for test, timing in data['timings'].items()),
+                reverse=True
+            )
+            for timing, test in slowest[:options['list_slow']]:
+                real_result.stream.writeln(" %.3fs: %s" % (timing, test))
+            real_result.stream.writeln()
+
         infos = []
         skipped = len(real_result.skipped)
         expected_fails = len(real_result.expectedFailures)
@@ -294,41 +329,8 @@ class Command(DjangoTest):
         else:
             real_result.stream.write("\n")
 
-        # Record timings to database
-        data = {
-            'timings': database.get('timings', {}),
-        }
-        for test, timing in real_result.timings.items():
-            data['timings'][test] = timing
-
-        # Record failed tests to database
-        data['failed'] = [
-            test.qualname for test, _ in itertools.chain(
-                real_result.failures,
-                real_result.errors,
-                [(test, None) for test in real_result.unexpectedSuccesses]
-            )
-        ]
-
-        # Record config to database
-        data['last_run'] = {
-            'isolate': options['isolate'],
-            'parallel': options['parallel'],
-            'list_slow': options['list_slow'],
-            'labels': all_test_labels,
-        }
-
+        # Save the database
         write_database(data)
-
-        # Show slowest tests
-        if options['list_slow']:
-            real_result.stream.writeln("Slowest tests:")
-            slowest = sorted(
-                ((timing, test) for test, timing in data['timings'].items()),
-                reverse=True
-            )
-            for timing, test in slowest[:options['list_slow']]:
-                real_result.stream.writeln(" %.3fs: %s" % (timing, test))
 
         return_code = len(real_result.failures) + len(real_result.errors)
         sys.exit(return_code)
