@@ -177,7 +177,7 @@ class Command(DjangoTest):
         database = read_database()
 
         # Re-run using last configuration
-        if options['retest'] and database['last_run']:
+        if options['retest'] and database.get('last_run', None):
             last_run = database['last_run']
             options['parallel'] = last_run['parallel']
             options['isolate'] = last_run['isolate']
