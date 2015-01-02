@@ -12,4 +12,4 @@ suite. To simply re-run the tests using the last configuration, use
 ``--retest``.
 
 Simply add ``better_test`` to your ``INSTALLED_APPS`` and use
-``manage.py test``.
+``manage.py test --help for all options``.
