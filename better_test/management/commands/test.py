@@ -5,6 +5,8 @@ import os
 import unittest
 import sys
 import time
+import itertools
+
 try:
     import queue
 except ImportError:
@@ -148,13 +150,15 @@ class Command(DjangoTest):
         make_option('--isolate',
             action='store_true', dest='isolate', default=False,
             help='Run each test isolated.'),
+        make_option('--retest',
+            action='store_true', dest='retest', default=False,
+            help='Re-run tests that failed the last time.'),
+        make_option('--list-slow',
+            type=int, dest='list_slow', default=0,
+            help='Amount of slow tests to print.'),
     )
 
     def handle(self, *test_labels, **options):
-        # if we're not doing anything fancy, let Django handle this.
-        if not any([options['parallel'], options['isolate']]):
-            return super(Command, self).handle(*test_labels, **options)
-
         from django.conf import settings
         from django.test.utils import get_runner
 
@@ -182,12 +186,18 @@ class Command(DjangoTest):
 
         database = read_database()
 
+        if options['retest']:
+            all_test_labels = [
+                label for label in all_test_labels
+                if label in database.get('failed', all_test_labels)
+            ]
+
         if options['isolate']:
             # Isolate means one test (label) per task process.
             chunks = [
                 [label] for label in all_test_labels
             ]
-        else:
+        elif options['parallel']:
             # Try to distribute the test labels equally across the available
             # CPU cores
             chunk_count = multiprocessing.cpu_count()
@@ -200,6 +210,8 @@ class Command(DjangoTest):
 
             # filter empty chunks
             chunks = list(filter(bool, chunks))
+        else:
+            chunks = [all_test_labels]
 
         # Initialize shared values
         results_queue = multiprocessing.Queue()
@@ -278,7 +290,24 @@ class Command(DjangoTest):
         for test, timing in real_result.timings.items():
             data['timings'][test] = timing
 
+        data['failed'] = [
+            test.qualname for test, _ in itertools.chain(
+                real_result.failures,
+                real_result.errors,
+                [(test, None) for test in real_result.unexpectedSuccesses]
+            )
+        ]
+
         write_database(data)
+
+        if options['list_slow']:
+            real_result.stream.writeln("Slowest tests:")
+            slowest = sorted(
+                ((timing, test) for test, timing in data['timings'].items()),
+                reverse=True
+            )
+            for timing, test in slowest[:options['list_slow']]:
+                real_result.stream.writeln(" %.3fs: %s" % (timing, test))
 
         return_code = len(real_result.failures) + len(real_result.errors)
         sys.exit(return_code)
