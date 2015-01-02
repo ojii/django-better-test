@@ -156,6 +156,9 @@ class Command(DjangoTest):
         make_option('--list-slow',
             type=int, dest='list_slow', default=0,
             help='Amount of slow tests to print.'),
+        make_option('--retest',
+            action='store_true', dest='retest', default=False,
+            help='Re-run the tests using the last configuration.'),
     )
 
     def handle(self, *test_labels, **options):
@@ -171,6 +174,16 @@ class Command(DjangoTest):
             os.environ['DJANGO_LIVE_TEST_SERVER_ADDRESS'] = options['liveserver']
             del options['liveserver']
 
+        database = read_database()
+
+        # Re-run using last configuration
+        if options['retest'] and database['last_run']:
+            last_run = database['last_run']
+            options['parallel'] = last_run['parallel']
+            options['isolate'] = last_run['isolate']
+            options['list_slow'] = last_run['list_slow']
+            test_labels = last_run['labels']
+
         # Get the test runner instance, this won't actually be used to run
         # anything, but rather builds the suite so we can get a list of test
         # labels to run
@@ -183,8 +196,6 @@ class Command(DjangoTest):
         # If there's nothing to run, let Django handle it.
         if not all_test_labels:
             return super(Command, self).handle(*test_labels, **options)
-
-        database = read_database()
 
         if options['failed']:
             all_test_labels = [
@@ -283,13 +294,14 @@ class Command(DjangoTest):
         else:
             real_result.stream.write("\n")
 
-        # record timings to database
+        # Record timings to database
         data = {
             'timings': database.get('timings', {}),
         }
         for test, timing in real_result.timings.items():
             data['timings'][test] = timing
 
+        # Record failed tests to database
         data['failed'] = [
             test.qualname for test, _ in itertools.chain(
                 real_result.failures,
@@ -298,8 +310,17 @@ class Command(DjangoTest):
             )
         ]
 
+        # Record config to database
+        data['last_run'] = {
+            'isolate': options['isolate'],
+            'parallel': options['parallel'],
+            'list_slow': options['list_slow'],
+            'labels': all_test_labels,
+        }
+
         write_database(data)
 
+        # Show slowest tests
         if options['list_slow']:
             real_result.stream.writeln("Slowest tests:")
             slowest = sorted(

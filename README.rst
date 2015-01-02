@@ -8,7 +8,8 @@ in parallel (distributed as evenly as possible across your CPU cores) and
 state. You can also quickly re-run the tests failed in the last run using
 ``--failed``. To show which tests are slowing you down, use
 ``--list-slow=<number>`` to show the ``<number>`` slowest tests in your test
-suite.
+suite. To simply re-run the tests using the last configuration, use
+``--retest``.
 
 Simply add ``better_test`` to your ``INSTALLED_APPS`` and use
 ``manage.py test``.
