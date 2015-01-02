@@ -150,8 +150,8 @@ class Command(DjangoTest):
         make_option('--isolate',
             action='store_true', dest='isolate', default=False,
             help='Run each test isolated.'),
-        make_option('--retest',
-            action='store_true', dest='retest', default=False,
+        make_option('--failed',
+            action='store_true', dest='failed', default=False,
             help='Re-run tests that failed the last time.'),
         make_option('--list-slow',
             type=int, dest='list_slow', default=0,
@@ -186,7 +186,7 @@ class Command(DjangoTest):
 
         database = read_database()
 
-        if options['retest']:
+        if options['failed']:
             all_test_labels = [
                 label for label in all_test_labels
                 if label in database.get('failed', all_test_labels)
