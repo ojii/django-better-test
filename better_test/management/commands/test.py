@@ -21,18 +21,27 @@ from better_test.database import write_database
 QUEUE = None
 
 
-def suite_to_labels(suite):
+def suite_to_labels(suite, result):
     """
     Transform a unittest.TestSuite to a list of test labels that can be used
     by django.test.DiscoveryRunner.run_tests.
     """
-    return [
-        '{}.{}.{}'.format(
-            test.__class__.__module__,
-            test.__class__.__name__,
-            test._testMethodName
-        ) for test in suite._tests
-    ]
+    labels = []
+    for test in suite._tests:
+        klass = test.__class__
+        name = klass.__name__
+        module = klass.__module__
+        if name == 'ModuleImportFailure' and module == 'unittest.loader':
+            test.qualname = module + '.' + name
+            try:
+                getattr(test, test._testMethodName)()
+            except Exception as err:
+                result.addError(test, err)
+        else:
+            labels.append(
+                '{}.{}.{}'.format(module, name, test._testMethodName)
+            )
+    return labels
 
 
 def multi_processing_runner_factory(stream):
@@ -159,9 +168,14 @@ class Command(DjangoTest):
         make_option('--retest',
             action='store_true', dest='retest', default=False,
             help='Re-run the tests using the last configuration.'),
+        make_option('--vanilla',
+            action='store_true', dest='vanilla', default=False,
+            help='Ignore better test.')
     )
 
     def handle(self, *test_labels, **options):
+        if options['vanilla']:
+            DjangoTest().handle(*test_labels, **options)
         from django.conf import settings
         from django.test.utils import get_runner
 
@@ -191,7 +205,13 @@ class Command(DjangoTest):
 
         suite = test_runner.build_suite(test_labels)
 
-        all_test_labels = suite_to_labels(suite)
+        # Get an actual result class we can use
+        pseudo_runner = unittest.TextTestRunner(
+            resultclass=MultiProcessingTextTestResult
+        )
+        real_result = pseudo_runner._makeResult()
+
+        all_test_labels = suite_to_labels(suite, real_result)
 
         # If there's nothing to run, let Django handle it.
         if not all_test_labels:
@@ -242,12 +262,6 @@ class Command(DjangoTest):
                 run_tests,
                 (chunk, TestRunner, options)
             ))
-
-        # Get an actual result class we can use
-        pseudo_runner = unittest.TextTestRunner(
-            resultclass=MultiProcessingTextTestResult
-        )
-        real_result = pseudo_runner._makeResult()
 
         # Wait for results to come in
         wait_for_tests_to_finish(real_result, async_results, results_queue)
@@ -418,10 +432,11 @@ class MultiProcessingTestResult(unittest.TestResult):
             )
         ))
 
-    def addSkip(self, test, reason):
+    def addSkip(self, test, reason=None):
         QUEUE.put((
             'addSkip', (
                 serialize(test),
+                reason
             )
         ))
 
