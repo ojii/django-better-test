@@ -350,7 +350,13 @@ class Command(DjangoTest):
         sys.exit(return_code)
 
 
-class MultiProcessingTextTestResult(unittest.TextTestResult):
+try:
+    TextTestResult = unittest.TextTestResult
+except ImportError:  # Python 2.6
+    TextTestResult = unittest._TextTestResult
+
+
+class MultiProcessingTextTestResult(TextTestResult):
     """
     Thin wrapper around TextTestResult. Python tracebacks are not pickleable,
     so _exc_info_to_string is handled in MultiProcessingTestResult and the
