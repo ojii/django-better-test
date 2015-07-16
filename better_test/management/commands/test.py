@@ -2,7 +2,6 @@ from contextlib import contextmanager
 from optparse import make_option
 import multiprocessing
 import os
-import unittest
 import sys
 import time
 import itertools
@@ -18,58 +17,14 @@ from better_test.database import read_database
 from better_test.database import simple_weighted_partition
 from better_test.database import write_database
 
+PY_26 = sys.version_info[0] == 2 and sys.version_info[1] == 6
 
-try:
-    from unittest import TextTestResult, TextTestRunner
-    PY_26 = False
-except ImportError:  # Python 2.6
-    from unittest import _TextTestResult
-    PY_26 = True
-
-
-    class TextTestResult(_TextTestResult):
-        separator1 = '=' * 70
-        separator2 = '-' * 70
-
-        def __init__(self, *args, **kwargs):
-            self.unexpectedSuccesses = []
-            self.skipped = []
-            self.expectedFailures = []
-            super(TextTestResult, self).__init__(*args, **kwargs)
-
-        def addExpectedFailure(self, test, err):
-            self.expectedFailures.append(
-                (test, self._exc_info_to_string(err, test)))
-            if self.showAll:
-                self.stream.writeln("expected failure")
-            elif self.dots:
-                self.stream.write("x")
-                self.stream.flush()
-
-        def addUnexpectedSuccess(self, test):
-            self.unexpectedSuccesses.append(test)
-            if self.showAll:
-                self.stream.writeln("unexpected success")
-            elif self.dots:
-                self.stream.write("u")
-                self.stream.flush()
-
-    class TextTestRunner(unittest.TextTestRunner):
-        def __init__(self, stream=sys.stderr, descriptions=1, verbosity=1,
-                     failfast=None, resultclass=TextTestResult):
-            self.resultclass = resultclass
-            super(TextTestRunner, self).__init__(
-                stream=stream,
-                descriptions=descriptions,
-                verbosity=verbosity
-            )
-
-        def _makeResult(self):
-            return self.resultclass(
-                self.stream,
-                self.descriptions,
-                self.verbosity
-            )
+if PY_26:
+    from django.utils import unittest
+    from django.utils.unittest.suite import _ErrorHolder as ErrorHolder
+else:
+    import unittest
+    from unittest.suite import _ErrorHolder as ErrorHolder
 
 
 QUEUE = None
@@ -122,7 +77,7 @@ def multi_processing_runner_factory(stream):
             args[5] = MultiProcessingTestResult
         else:
             kwargs['resultclass'] = MultiProcessingTestResult
-        return TextTestRunner(*args, **kwargs)
+        return unittest.TextTestRunner(*args, **kwargs)
     return inner
 
 
@@ -203,6 +158,12 @@ def wait_for_tests_to_finish(real_result, async_results, results_queue):
 
 
 def serialize(test):
+    if isinstance(test, ErrorHolder):
+        return (
+            test.id(),
+            str(test),
+            test.shortDescription(),
+        )
     return (
         test_to_dotted(test),
         str(test),
@@ -265,7 +226,7 @@ class Command(DjangoTest):
         suite = test_runner.build_suite(test_labels)
 
         # Get an actual result class we can use
-        pseudo_runner = TextTestRunner(
+        pseudo_runner = unittest.TextTestRunner(
             resultclass=MultiProcessingTextTestResult
         )
         real_result = pseudo_runner._makeResult()
@@ -413,7 +374,7 @@ class Command(DjangoTest):
         sys.exit(return_code)
 
 
-class MultiProcessingTextTestResult(TextTestResult):
+class MultiProcessingTextTestResult(unittest.TextTestResult):
     """
     Thin wrapper around TextTestResult. Python tracebacks are not pickleable,
     so _exc_info_to_string is handled in MultiProcessingTestResult and the
@@ -551,7 +512,7 @@ class FakeTest(object):
 
 
 class MultiProcessingTestRunner(object):
-    test_runner = TextTestRunner
+    test_runner = unittest.TextTestRunner
 
     def run_suite(self, suite, **kwargs):
         """

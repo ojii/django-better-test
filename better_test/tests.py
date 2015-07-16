@@ -23,3 +23,15 @@ class Tests(unittest.TestCase):
     @unittest.expectedFailure
     def test_unexpected_success(self):
         time.sleep(1.5)
+
+    def test_skip(self):
+        raise unittest.SkipTest("Skipping")
+
+
+class SkipTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        raise unittest.SkipTest("Skipping Class")
+
+    def test_method(self):
+        pass
