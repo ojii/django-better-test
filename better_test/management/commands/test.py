@@ -351,9 +351,9 @@ class Command(DjangoTest):
 
 
 try:
-    TextTestResult = unittest.TextTestResult
+    from unittest import TextTestResult
 except ImportError:  # Python 2.6
-    TextTestResult = unittest._TextTestResult
+    from unittest import _TextTestResult as TextTestResult
 
 
 class MultiProcessingTextTestResult(TextTestResult):
