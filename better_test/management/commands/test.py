@@ -18,7 +18,72 @@ from better_test.database import read_database
 from better_test.database import simple_weighted_partition
 from better_test.database import write_database
 
+
+try:
+    from unittest import TextTestResult, TextTestRunner
+    PY_26 = False
+except ImportError:  # Python 2.6
+    from unittest import _TextTestResult
+    PY_26 = True
+
+
+    class TextTestResult(_TextTestResult):
+        separator1 = '=' * 70
+        separator2 = '-' * 70
+
+        def __init__(self, *args, **kwargs):
+            self.unexpectedSuccesses = []
+            self.skipped = []
+            self.expectedFailures = []
+            super(TextTestResult, self).__init__(*args, **kwargs)
+
+        def addExpectedFailure(self, test, err):
+            self.expectedFailures.append(
+                (test, self._exc_info_to_string(err, test)))
+            if self.showAll:
+                self.stream.writeln("expected failure")
+            elif self.dots:
+                self.stream.write("x")
+                self.stream.flush()
+
+        def addUnexpectedSuccess(self, test):
+            self.unexpectedSuccesses.append(test)
+            if self.showAll:
+                self.stream.writeln("unexpected success")
+            elif self.dots:
+                self.stream.write("u")
+                self.stream.flush()
+
+    class TextTestRunner(unittest.TextTestRunner):
+        def __init__(self, stream=sys.stderr, descriptions=1, verbosity=1,
+                     failfast=None, resultclass=TextTestResult):
+            self.resultclass = resultclass
+            super(TextTestRunner, self).__init__(
+                stream=stream,
+                descriptions=descriptions,
+                verbosity=verbosity
+            )
+
+        def _makeResult(self):
+            return self.resultclass(
+                self.stream,
+                self.descriptions,
+                self.verbosity
+            )
+
+
 QUEUE = None
+
+
+def test_to_dotted(test):
+    klass = test.__class__
+    name = klass.__name__
+    module = klass.__module__
+    return '{module}.{name}.{method}'.format(
+        module=module,
+        name=name,
+        method=test._testMethodName
+    )
 
 
 def suite_to_labels(suite, result):
@@ -38,9 +103,7 @@ def suite_to_labels(suite, result):
             except Exception as err:
                 result.addError(test, err)
         else:
-            labels.append(
-                '{}.{}.{}'.format(module, name, test._testMethodName)
-            )
+            labels.append(test_to_dotted(test))
     return labels
 
 
@@ -59,7 +122,7 @@ def multi_processing_runner_factory(stream):
             args[5] = MultiProcessingTestResult
         else:
             kwargs['resultclass'] = MultiProcessingTestResult
-        return unittest.TextTestRunner(*args, **kwargs)
+        return TextTestRunner(*args, **kwargs)
     return inner
 
 
@@ -141,11 +204,7 @@ def wait_for_tests_to_finish(real_result, async_results, results_queue):
 
 def serialize(test):
     return (
-        '{}.{}.{}'.format(
-            test.__class__.__module__,
-            test.__class__.__name__,
-            test._testMethodName,
-        ),
+        test_to_dotted(test),
         str(test),
         test.shortDescription()
     )
@@ -206,7 +265,7 @@ class Command(DjangoTest):
         suite = test_runner.build_suite(test_labels)
 
         # Get an actual result class we can use
-        pseudo_runner = unittest.TextTestRunner(
+        pseudo_runner = TextTestRunner(
             resultclass=MultiProcessingTextTestResult
         )
         real_result = pseudo_runner._makeResult()
@@ -278,9 +337,13 @@ class Command(DjangoTest):
 
         real_result.printErrors()
         real_result.stream.writeln(real_result.separator2)
-        real_result.stream.writeln("Ran {} test{} in {:.3f}s".format(
-            test_count, test_count != 1 and "s" or "", time_taken
-        ))
+        real_result.stream.writeln(
+            "Ran {number} test{plural} in {time:.3f}s".format(
+                number=test_count,
+                plural=test_count != 1 and "s" or "",
+                time=time_taken
+            )
+        )
         real_result.stream.writeln()
 
         # Record timings to database
@@ -350,12 +413,6 @@ class Command(DjangoTest):
         sys.exit(return_code)
 
 
-try:
-    from unittest import TextTestResult
-except ImportError:  # Python 2.6
-    from unittest import _TextTestResult as TextTestResult
-
-
 class MultiProcessingTextTestResult(TextTestResult):
     """
     Thin wrapper around TextTestResult. Python tracebacks are not pickleable,
@@ -383,8 +440,14 @@ class MultiProcessingTestResult(unittest.TestResult):
     pickleable. Also note that exceptions are transformed to strings in the
     task as they're not picklable.
     """
+    separator1 = '=' * 70
+    separator2 = '-' * 70
+
     def __init__(self, *args, **kwargs):
-        super(MultiProcessingTestResult, self).__init__(*args, **kwargs)
+        if PY_26:
+            super(MultiProcessingTestResult, self).__init__()
+        else:
+            super(MultiProcessingTestResult, self).__init__(*args, **kwargs)
         self._timings = {}
 
     def printErrors(self):
@@ -488,7 +551,7 @@ class FakeTest(object):
 
 
 class MultiProcessingTestRunner(object):
-    test_runner = unittest.TextTestRunner
+    test_runner = TextTestRunner
 
     def run_suite(self, suite, **kwargs):
         """
