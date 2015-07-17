@@ -26,12 +26,3 @@ class Tests(unittest.TestCase):
 
     def test_skip(self):
         raise unittest.SkipTest("Skipping")
-
-
-class SkipTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        raise unittest.SkipTest("Skipping Class")
-
-    def test_method(self):
-        pass

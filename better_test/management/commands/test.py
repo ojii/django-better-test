@@ -199,6 +199,10 @@ class Command(DjangoTest):
         from django.conf import settings
         from django.test.utils import get_runner
 
+        if 'south' in settings.INSTALLED_APPS:
+            from south.management.commands import patch_for_test_db_setup
+            patch_for_test_db_setup()
+
         # load test runner class
         TestRunner = get_runner(settings, options.get('testrunner'))
 
