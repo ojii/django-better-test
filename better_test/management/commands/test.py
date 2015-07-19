@@ -195,7 +195,7 @@ class Command(DjangoTest):
 
     def handle(self, *test_labels, **options):
         if options['vanilla']:
-            DjangoTest().handle(*test_labels, **options)
+            return DjangoTest().handle(*test_labels, **options)
         from django.conf import settings
         from django.test.utils import get_runner
 
