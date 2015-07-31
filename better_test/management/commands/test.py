@@ -28,7 +28,7 @@ else:
     from unittest.suite import _ErrorHolder as ErrorHolder
 
 
-QUEUE = None
+QUEUE = None  # See init_task
 
 
 def test_to_dotted(test):
@@ -101,6 +101,10 @@ def run_tests(labels, runner_class, runner_options, chunk_num):
     """
     Test runner inside the task process.
     """
+    # We need to patch the db name in case we're in --parallel or --isolate
+    # mode (or any other mode with more than one chunk). But if there's only
+    # a single chunk, don't change the db name. Therefore we don't modify the
+    # name for the first chunk (chunk_num=0).
     if chunk_num:
         for config in settings.DATABASES.values():
             if config.get('NAME', None) != ':memory:':
@@ -163,6 +167,13 @@ def wait_for_tests_to_finish(real_result, async_results, results_queue):
 
 
 def serialize(test):
+    """
+    Serializes a test (which can either be a TestCase-like or an ErrorHolder)
+    for safe transport via a Queue.
+    ErrorHolder (if actual test setup failed, not anything during test run) is
+    special cased because it's a dynamic class and isn't quite the same as
+    normal tests.
+    """
     if isinstance(test, ErrorHolder):
         return (
             test.id(),
@@ -352,6 +363,7 @@ class Command(DjangoTest):
                 real_result.stream.writeln(" %.3fs: %s" % (timing, test))
             real_result.stream.writeln()
 
+        # Display info about failures etc
         infos = []
         skipped = len(real_result.skipped)
         expected_fails = len(real_result.expectedFailures)
@@ -380,7 +392,15 @@ class Command(DjangoTest):
         # Save the database
         write_database(data)
 
-        return_code = len(real_result.failures) + len(real_result.errors)
+        # For easy integration, returns the number of failed tests as the
+        # return code. This means that if all tests passed, 0 is returned,
+        # which happens to be the standard return code for "success"
+        return_code = sum(map(len, (
+            real_result.failures,
+            real_result.errors,
+            real_result.unexpectedSuccesses,
+            real_result.expectedFailures
+        )))
         sys.exit(return_code)
 
 
@@ -397,6 +417,10 @@ class MultiProcessingTextTestResult(unittest.TextTestResult):
 
     @property
     def testsRun(self):
+        """
+        Usually incremented via startTest, but we don't call that function, so
+        we simply introspect all results we have.
+        """
         return sum(map(len, (
             self.errors,
             self.failures,
@@ -408,15 +432,26 @@ class MultiProcessingTextTestResult(unittest.TextTestResult):
 
     @testsRun.setter
     def testsRun(self, value):
+        """
+        The super class sets/increments this value in some functions, so for
+        simplicity we allow setting it and just discard the value.
+        """
         pass
 
     def registerTiming(self, test, timing):
         self.timings[test.qualname] = timing
 
     def addSuccess(self, test):
+        """
+        The default result class doesn't store successes, so we do it ourselves
+        """
         self.successes.append(test)
 
     def _exc_info_to_string(self, err, test):
+        """
+        Actual transformation from exception info to string happens in the
+        executor, as exceptions can't be transferred through a Queue.
+        """
         return err
 
 
