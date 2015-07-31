@@ -12,6 +12,7 @@ except ImportError:
     import Queue as queue
 
 from django.core.management.commands.test import Command as DjangoTest
+from django.conf import settings
 
 from better_test.database import read_database
 from better_test.database import simple_weighted_partition
@@ -96,10 +97,14 @@ def null_stdout():
         nullout.close()
 
 
-def run_tests(labels, runner_class, runner_options):
+def run_tests(labels, runner_class, runner_options, chunk_num):
     """
     Test runner inside the task process.
     """
+    if chunk_num:
+        for config in settings.DATABASES.values():
+            if config.get('NAME', None) != ':memory:':
+                config['NAME'] += '_{num}'.format(num=chunk_num)
     try:
         with null_stdout() as nullout:
             real_runner_class = type(
@@ -225,6 +230,8 @@ class Command(DjangoTest):
         # Get the test runner instance, this won't actually be used to run
         # anything, but rather builds the suite so we can get a list of test
         # labels to run
+        # interactive is disabled since it doesn't work in multiprocessing
+        options['interactive'] = False
         test_runner = TestRunner(**options)
 
         suite = test_runner.build_suite(test_labels)
@@ -281,10 +288,10 @@ class Command(DjangoTest):
 
         # Send tasks to pool
         async_results = []
-        for chunk in chunks:
+        for chunk_num, chunk in enumerate(chunks):
             async_results.append(pool.apply_async(
                 run_tests,
-                (chunk, TestRunner, options)
+                (chunk, TestRunner, options, chunk_num)
             ))
 
         # Wait for results to come in
@@ -297,15 +304,14 @@ class Command(DjangoTest):
         end_time = time.time()
 
         # Report result, this is mostly taken from TextTestRunner.run
-        test_count = len(all_test_labels)
         time_taken = end_time - start_time
 
         real_result.printErrors()
         real_result.stream.writeln(real_result.separator2)
         real_result.stream.writeln(
             "Ran {number} test{plural} in {time:.3f}s".format(
-                number=test_count,
-                plural=test_count != 1 and "s" or "",
+                number=real_result.testsRun,
+                plural=real_result.testsRun != 1 and "s" or "",
                 time=time_taken
             )
         )
@@ -387,9 +393,28 @@ class MultiProcessingTextTestResult(unittest.TextTestResult):
     def __init__(self, *args, **kwargs):
         super(MultiProcessingTextTestResult, self).__init__(*args, **kwargs)
         self.timings = {}
+        self.successes = []
+
+    @property
+    def testsRun(self):
+        return sum(map(len, (
+            self.errors,
+            self.failures,
+            self.unexpectedSuccesses,
+            self.expectedFailures,
+            self.successes,
+            self.skipped
+        )))
+
+    @testsRun.setter
+    def testsRun(self, value):
+        pass
 
     def registerTiming(self, test, timing):
         self.timings[test.qualname] = timing
+
+    def addSuccess(self, test):
+        self.successes.append(test)
 
     def _exc_info_to_string(self, err, test):
         return err
