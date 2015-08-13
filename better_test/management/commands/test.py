@@ -26,6 +26,15 @@ if PY_26:
 else:
     import unittest
     from unittest.suite import _ErrorHolder as ErrorHolder
+try:
+    from unittest2.suite import _ErrorHolder as ErrorHolder2
+except ImportError:
+    ErrorHolder2 = False
+
+if ErrorHolder2:
+    ERROR_HOLDER_CLASSES = (ErrorHolder, ErrorHolder2)
+else:
+    ERROR_HOLDER_CLASSES = (ErrorHolder,)
 
 
 QUEUE = None  # See init_task
@@ -174,7 +183,7 @@ def serialize(test):
     special cased because it's a dynamic class and isn't quite the same as
     normal tests.
     """
-    if isinstance(test, ErrorHolder):
+    if isinstance(test, ERROR_HOLDER_CLASSES):
         return (
             test.id(),
             str(test),
