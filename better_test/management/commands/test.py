@@ -308,6 +308,10 @@ class Command(DjangoTest):
         # Wait for results to come in
         wait_for_tests_to_finish(real_result, async_results, results_queue)
 
+        failed_executors = sum(
+            0 if result.successful() else 1 for result in async_results
+        )
+
         # Stop all tasks
         pool.close()
         pool.join()
@@ -376,6 +380,8 @@ class Command(DjangoTest):
                 infos.append("failures=%d" % failed)
             if errored:
                 infos.append("errors=%d" % errored)
+        elif failed_executors:
+            real_result.stream.write("%d executors failed" % failed_executors)
         else:
             real_result.stream.write("OK")
         if skipped:
@@ -395,12 +401,13 @@ class Command(DjangoTest):
         # For easy integration, returns the number of failed tests as the
         # return code. This means that if all tests passed, 0 is returned,
         # which happens to be the standard return code for "success"
+        # Also the number of failed executors is added.
         return_code = sum(map(len, (
             real_result.failures,
             real_result.errors,
             real_result.unexpectedSuccesses,
             real_result.expectedFailures
-        )))
+        ))) + failed_executors
         sys.exit(return_code)
 
 
@@ -445,6 +452,7 @@ class MultiProcessingTextTestResult(unittest.TextTestResult):
         """
         The default result class doesn't store successes, so we do it ourselves
         """
+        super(MultiProcessingTextTestResult, self).addSuccess(test)
         self.successes.append(test)
 
     def _exc_info_to_string(self, err, test):
