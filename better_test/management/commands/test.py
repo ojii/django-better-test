@@ -40,6 +40,14 @@ else:
 QUEUE = None  # See init_task
 
 
+class DisableMigrations(object):
+    def __contains__(self, item):
+        return True
+
+    def __getitem__(self, item):
+        return "notmigrations"
+
+
 def test_to_dotted(test):
     klass = test.__class__
     name = klass.__name__
@@ -215,13 +223,21 @@ class Command(DjangoTest):
             help='Re-run the tests using the last configuration.'),
         make_option('--vanilla',
             action='store_true', dest='vanilla', default=False,
-            help='Ignore better test.')
+            help='Ignore better test.'),
+        make_option('--no-migrations',
+            action='store_false', dest='migrate', default=True,
+            help='Do not run migrations'),
     )
 
     def handle(self, *test_labels, **options):
+        from django.conf import settings
+
+        if not options['migrate']:
+            settings.MIGRATION_MODULES = DisableMigrations()
+
         if options['vanilla']:
             return DjangoTest().handle(*test_labels, **options)
-        from django.conf import settings
+        
         from django.test.utils import get_runner
 
         if 'south' in settings.INSTALLED_APPS:
