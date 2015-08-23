@@ -1,12 +1,9 @@
 import unittest
 
+from better_test.parallel import Pool
 from better_test.parallel import MultiProcessingTextTestResult
-from better_test.parallel import init_task
-from better_test.parallel import executor
-from better_test.parallel import wait_for_tests_to_finish
 from better_test.utils import suite_to_labels
 from better_test.utils import simple_weighted_partition
-import multiprocessing
 import time
 
 ISOLATED = 1
@@ -44,8 +41,9 @@ class Result(object):
             self.failures,
             self.errors,
             self.unexpected_successes,
-            self.expected_failures
-        ))) + self.failed_executors
+            self.expected_failures,
+            self.failed_executors
+        )))
 
 
 class Config(object):
@@ -93,36 +91,13 @@ def run(test_labels, test_runner_options, config):
     else:
         raise ValueError("Unknown mode: {0}".format(config.mode))
 
-    # Initialize shared values
-    results_queue = multiprocessing.Queue()
-
-    # Initialize pool
-    pool = multiprocessing.Pool(
-        initializer=init_task,
-        initargs=(results_queue,)
-    )
-
     start_time = time.time()
-
-    # Send tasks to pool
-    async_results = []
-    for chunk_num, chunk in enumerate(chunks):
-        async_results.append(pool.apply_async(
-            executor,
-            (chunk, config.test_runner_class, test_runner_options, chunk_num)
-        ))
-
-    # Wait for results to come in
-    wait_for_tests_to_finish(real_result, async_results, results_queue)
-
-    failed_executors = sum(
-        0 if result.successful() else 1 for result in async_results
+    pool = Pool(real_result, config.processes)
+    failed_executors = pool.run(
+        chunks,
+        config.test_runner_class,
+        test_runner_options
     )
-
-    # Stop all tasks
-    pool.close()
-    pool.join()
-
     end_time = time.time()
 
     # Report result, this is mostly taken from TextTestRunner.run

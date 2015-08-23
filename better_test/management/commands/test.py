@@ -9,6 +9,7 @@ from django.conf import settings
 
 from better_test.database import read_database
 from better_test.utils import DisableMigrations
+from better_test.utils import get_test_runner
 from better_test.core import Config
 from better_test.core import run
 from better_test.core import ISOLATED
@@ -81,9 +82,7 @@ def get_config(database, options, test_labels):
     Turn the command options (and database info) into a Config object to be
     used by core.run.
     """
-    from django.test.utils import get_runner
-
-    test_runner = get_runner(settings, options.get('testrunner'))
+    test_runner = get_test_runner(options.get('testrunner'))
 
     if options['retest'] and database.get('last_run', None):
         last_run = database['last_run']
@@ -151,6 +150,11 @@ def display_result(stream, result):
     writeln('')  # newline after the "dots"
     _write_error_list('ERROR', result.errors, writeln)
     _write_error_list('FAIL', result.failures, writeln)
+    for chunk, exit_code in result.failed_executors:
+        writeln(SEPARATOR_1)
+        writeln('FAILED EXECUTOR: {exit_code}'.format(exit_code=exit_code))
+        writeln(SEPARATOR_2)
+        writeln(str(chunk))
     writeln(SEPARATOR_2)
     writeln(
         "Ran {number} test{plural} in {time:.3f}s".format(
@@ -166,26 +170,33 @@ def display_result(stream, result):
     skipped = len(result.skipped)
     expected_fails = len(result.expected_failures)
     unexpected_successes = len(result.unexpected_successes)
+    failed_executors = len(result.failed_executors)
     if not result.success:
         stream.write("FAILED")
         failed = len(result.failures)
         errored = len(result.errors)
         if failed:
-            infos.append("failures=%d" % failed)
+            infos.append("failures={failed}".format(failed=failed))
         if errored:
-            infos.append("errors=%d" % errored)
+            infos.append("errors={errors}".format(errors=errored))
     elif result.failed_executors:
-        stream.write("%d executors failed" % result.failed_executors)
+        stream.write("executors failed={failed_executors}".format(
+            failed_executors=failed_executors
+        ))
     else:
         stream.write("OK")
     if skipped:
-        infos.append("skipped=%d" % skipped)
+        infos.append("skipped={skipped}".format(skipped=skipped))
     if expected_fails:
-        infos.append("expected failures=%d" % expected_fails)
+        infos.append("expected failures={expected_failures}".format(
+            expected_failures=expected_fails
+        ))
     if unexpected_successes:
-        infos.append("unexpected successes=%d" % unexpected_successes)
+        infos.append("unexpected successes={unexpected_successes}".format(
+            unexpected_successes=unexpected_successes
+        ))
     if infos:
-        writeln(" (%s)" % (", ".join(infos),))
+        writeln(" ({info})".format(info=", ".join(infos)))
     else:
         writeln('')
 
@@ -201,7 +212,7 @@ def list_slow(stream, result, num):
         reverse=True
     )
     for timing, test in slowest[:num]:
-        writeln(" %.3fs: %s" % (timing, test))
+        writeln(" {timing:.3f}s: {test}".format(timing=timing, test=test))
     writeln('')
 
 

@@ -1,4 +1,5 @@
 import time
+import multiprocessing
 
 from django.conf import settings
 
@@ -9,24 +10,78 @@ from better_test.utils import null_stdout
 from better_test.utils import serialize
 
 
-QUEUE = None  # See init_task
+class Pool(object):
+    def __init__(self, real_result, max_processes=multiprocessing.cpu_count()):
+        self.real_result = real_result
+        self.max_processes = max_processes
+        self.processes = []
+        self.results = multiprocessing.Queue()
+        self.failed_executors = []
+
+    def run(self, chunks, runner_class, runner_options):
+        chunk_num = 0
+        while chunks:
+            while len(self.processes) >= self.max_processes:
+                self.handle_results()
+            chunk = chunks.pop()
+            process = multiprocessing.Process(
+                target=executor,
+                args=(
+                    chunk,
+                    runner_class,
+                    runner_options,
+                    chunk_num,
+                    self.results
+                )
+            )
+            process.start()
+            self.processes.append((process, chunk))
+            chunk_num += 1
+
+        while len(self.processes):
+            self.handle_results()
+
+        return self.failed_executors
+
+    def handle_results(self):
+        result = None
+        try:
+            result = self.results.get_nowait()
+        except queue.Empty:
+            pass
+        if result is not None:
+            self.handle_result(result)
+        done = []
+        for process, chunk in self.processes:
+            if not process.is_alive():
+                done.append((process, chunk))
+                if process.exitcode != 0:
+                    self.failed_executors.append((
+                        chunk, process.exitcode
+                    ))
+        for process in done:
+            self.processes.remove(process)
+
+    def handle_result(self, result):
+        method_name, args = result
+        arglist = list(args)
+        test_info = arglist.pop(0)
+        fake_test = FakeTest.deserialize(test_info)
+        method = getattr(self.real_result, method_name)
+        method(fake_test, *arglist)
 
 
-def init_task(result_queue):
-    """
-    Initialize task process. multiprocessing.Value and multiprocessing.Queue
-    can't be sent via multiprocssing.Pool.apply_async, so have to be
-    initialized by this (as globals unfortunately).
-    """
-    global QUEUE
-    QUEUE = result_queue
-
-
-def multi_processing_runner_factory(stream):
+def multi_processing_runner_factory(stream, results):
     """
     Creates a test runner with the MultiProcessinTestResult result class and
     overwriting the output stream.
     """
+    test_result_class = type(
+        'MultiProcessingTestResult',
+        (MultiProcessingTestResult, ),
+        {'_results_queue': results}
+    )
+    
     def inner(*args, **kwargs):
         args = list(args)
         if len(args) > 0:
@@ -34,14 +89,14 @@ def multi_processing_runner_factory(stream):
         else:
             kwargs['stream'] = stream
         if len(args) > 5:
-            args[5] = MultiProcessingTestResult
+            args[5] = test_result_class
         else:
-            kwargs['resultclass'] = MultiProcessingTestResult
+            kwargs['resultclass'] = test_result_class
         return unittest.TextTestRunner(*args, **kwargs)
     return inner
 
 
-def executor(labels, runner_class, runner_options, chunk_num):
+def executor(labels, runner_class, runner_options, chunk_num, results):
     """
     Test runner inside the task process.
     """
@@ -58,7 +113,9 @@ def executor(labels, runner_class, runner_options, chunk_num):
             real_runner_class = type(
                 runner_class.__name__,
                 (MultiProcessingTestRunner, runner_class),
-                {'test_runner': multi_processing_runner_factory(nullout)}
+                {'test_runner': multi_processing_runner_factory(
+                    nullout, results
+                )}
             )
             runner = real_runner_class(**runner_options)
             runner.run_tests(labels)
@@ -66,38 +123,6 @@ def executor(labels, runner_class, runner_options, chunk_num):
         import traceback
         traceback.print_exc()
         raise
-
-
-def wait_for_tests_to_finish(real_result, async_results, results_queue):
-    """
-    Waits for all tasks to finish by checking if task_counter is zero. Whenever
-    a task (run_tests) finishes, it decrements the counter.
-
-    While waiting, it pulls results out of the results queue and feeds them
-    into the real result.
-    """
-    def handle(result):
-        method_name, args = result
-        arglist = list(args)
-        test_info = arglist.pop(0)
-        fake_test = FakeTest.deserialize(test_info)
-        method = getattr(real_result, method_name)
-        method(fake_test, *arglist)
-
-    def get_remaining_results():
-        return filter(
-            lambda result: not result.ready(), async_results
-        )
-
-    remaining_results = get_remaining_results()
-    while any(remaining_results):
-        remaining_results = get_remaining_results()
-        try:
-            handle(results_queue.get_nowait())
-        except queue.Empty:
-            continue
-    while not results_queue.empty():
-        handle(results_queue.get_nowait())
 
 
 class MultiProcessingTextTestResult(unittest.TextTestResult):
@@ -185,7 +210,7 @@ class MultiProcessingTestResult(unittest.TestResult):
         pass
 
     def stopTest(self, test):
-        QUEUE.put((
+        self._results_queue.put((
             'registerTiming', (
                 serialize(test),
                 time.time() - self._timings[test],
@@ -200,7 +225,7 @@ class MultiProcessingTestResult(unittest.TestResult):
 
     def addError(self, test, err):
         safe_err = self._exc_info_to_string(err, test)
-        QUEUE.put((
+        self._results_queue.put((
             'addError', (
                 serialize(test),
                 safe_err
@@ -209,7 +234,7 @@ class MultiProcessingTestResult(unittest.TestResult):
 
     def addFailure(self, test, err):
         safe_err = self._exc_info_to_string(err, test)
-        QUEUE.put((
+        self._results_queue.put((
             'addFailure', (
                 serialize(test),
                 safe_err
@@ -217,14 +242,14 @@ class MultiProcessingTestResult(unittest.TestResult):
         ))
 
     def addSuccess(self, test):
-        QUEUE.put((
+        self._results_queue.put((
             'addSuccess', (
                 serialize(test),
             )
         ))
 
     def addSkip(self, test, reason=None):
-        QUEUE.put((
+        self._results_queue.put((
             'addSkip', (
                 serialize(test),
                 reason
@@ -233,7 +258,7 @@ class MultiProcessingTestResult(unittest.TestResult):
 
     def addExpectedFailure(self, test, err):
         safe_err = self._exc_info_to_string(err, test)
-        QUEUE.put((
+        self._results_queue.put((
             'addExpectedFailure', (
                 serialize(test),
                 safe_err
@@ -241,7 +266,7 @@ class MultiProcessingTestResult(unittest.TestResult):
         ))
 
     def addUnexpectedSuccess(self, test):
-        QUEUE.put((
+        self._results_queue.put((
             'addUnexpectedSuccess', (
                 serialize(test),
             )

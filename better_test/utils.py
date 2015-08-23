@@ -90,3 +90,10 @@ def test_to_dotted(test):
         name=name,
         method=test._testMethodName
     )
+
+
+def get_test_runner(name=None):
+    from django.conf import settings
+    from django.test.utils import get_runner
+
+    return get_runner(settings, name)
