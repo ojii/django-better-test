@@ -4,7 +4,6 @@ import multiprocessing
 from django.conf import settings
 
 from better_test.compat import unittest
-from better_test.compat import queue
 from better_test.compat import PY_26
 from better_test.utils import null_stdout
 from better_test.utils import serialize
@@ -44,12 +43,8 @@ class Pool(object):
         return self.failed_executors
 
     def handle_results(self):
-        result = None
-        try:
+        while not self.results.empty():
             result = self.results.get_nowait()
-        except queue.Empty:
-            pass
-        if result is not None:
             self.handle_result(result)
         done = []
         for process, chunk in self.processes:

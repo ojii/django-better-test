@@ -3,6 +3,7 @@ import os
 import multiprocessing
 import itertools
 import sys
+import warnings
 
 from django.core.management.commands.test import Command as DjangoTest
 from django.conf import settings
@@ -42,12 +43,23 @@ class Command(DjangoTest):
             action='store_true', dest='vanilla', default=False,
             help='Ignore better test.'),
         make_option('--no-migrations',
-            action='store_false', dest='migrate', default=True,
+            action='store_true', dest='no_migrate', default=False,
             help='Do not run migrations'),
+        make_option('--migrate',
+            action='store_true', dest='migrate', default=False,
+            help='Run migrations (slow)'),
     )
 
     def handle(self, *test_labels, **options):
         from django.conf import settings
+
+        if options['no_migrate']:
+            warnings.warn(
+                "The --no-migrations flag is deprecated. Migrations are "
+                "skipped by default now, to use them, use --migrate.",
+                DeprecationWarning
+            )
+            options['migrate'] = False
 
         if not options.pop('migrate'):
             settings.MIGRATION_MODULES = DisableMigrations()
