@@ -1,10 +1,10 @@
-import unittest
+import time
 
 from better_test.parallel import Pool
 from better_test.parallel import MultiProcessingTextTestResult
 from better_test.utils import suite_to_labels
 from better_test.utils import simple_weighted_partition
-import time
+from better_test.compat import unittest
 
 ISOLATED = 1
 PARALLEL = 2
