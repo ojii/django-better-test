@@ -1,0 +1,27 @@
+language: python
+
+python:
+  - 2.6
+  - 2.7
+  - 3.3
+  - 3.4
+
+env:
+  - DJANGO='django>=1.6,<1.7'
+  - DJANGO='django>=1.7,<1.8'
+  - DJANGO='django>=1.8,<1.9'
+
+install:
+  - pip install -r test_requirements.txt
+  - pip install $DJANGO
+
+script: python manage.py test
+
+sudo: false
+
+matrix:
+  exclude:
+    - python: 2.6
+      env: DJANGO='django>=1.7,<1.8'
+    - python: 2.6
+      env: DJANGO='django>=1.8,<1.9'
