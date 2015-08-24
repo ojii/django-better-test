@@ -1,1 +1,2 @@
 https://github.com/ojii/segfault/archive/master.tar.gz#egg=segfault
+https://github.com/ojii/django-app-manage/archive/master.tar.gz#egg=django-app-manage
