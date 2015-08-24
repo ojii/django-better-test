@@ -1,6 +1,7 @@
 import unittest
 
 from better_test import core
+from better_test.parallel import SilentMultiProcessingTextTestResult
 from better_test.utils import get_test_runner
 
 
@@ -15,7 +16,8 @@ class TestCrashingExecutors(unittest.TestCase):
                 timings={},
                 processes=1,
                 debug=True
-            )
+            ),
+            real_result_class=SilentMultiProcessingTextTestResult
         )
         self.assertFalse(result.success)
         self.assertEqual(len(result.failed_executors), 1)

@@ -14,7 +14,7 @@ STANDARD = 0
 class Result(object):
     def __init__(self, tests_run, time_taken, timings, failures, errors,
                  skipped, expected_failures, unexpected_successes,
-                 failed_executors, test_labels):
+                 failed_executors, successes, test_labels):
         self.tests_run = tests_run
         self.time_taken = time_taken
         self.timings = timings
@@ -24,6 +24,7 @@ class Result(object):
         self.expected_failures = expected_failures
         self.unexpected_successes = unexpected_successes
         self.failed_executors = failed_executors
+        self.successes = successes
         self.test_labels = test_labels
 
     @property
@@ -55,14 +56,15 @@ class Config(object):
         self.debug = debug
 
 
-def run(test_labels, test_runner_options, config):
+def run(test_labels, test_runner_options, config,
+        real_result_class=MultiProcessingTextTestResult):
     test_runner = config.test_runner_class(**test_runner_options)
 
     suite = test_runner.build_suite(test_labels)
 
     # Get an actual result class we can use
     pseudo_runner = unittest.TextTestRunner(
-        resultclass=MultiProcessingTextTestResult
+        resultclass=real_result_class
     )
     real_result = pseudo_runner._makeResult()
 
@@ -115,5 +117,6 @@ def run(test_labels, test_runner_options, config):
         expected_failures=real_result.expectedFailures,
         unexpected_successes=real_result.unexpectedSuccesses,
         failed_executors=failed_executors,
+        successes=real_result.successes,
         test_labels=all_test_labels,
     )

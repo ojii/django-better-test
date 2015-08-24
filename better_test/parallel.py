@@ -172,6 +172,15 @@ class MultiProcessingTextTestResult(unittest.TextTestResult):
         return err
 
 
+class SilentMultiProcessingTextTestResult(MultiProcessingTextTestResult):
+    def __init__(self, *args, **kwargs):
+        super(SilentMultiProcessingTextTestResult, self).__init__(
+            *args, **kwargs
+        )
+        self.dots = False
+        self.showAll = False
+
+
 class MultiProcessingTestResult(unittest.TestResult):
     """
     Result class for used by the task processes. Instead of printing/storing
