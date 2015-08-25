@@ -1,4 +1,4 @@
-import unittest
+from better_test.compat import unittest
 
 
 class IsolateTests(unittest.TestCase):

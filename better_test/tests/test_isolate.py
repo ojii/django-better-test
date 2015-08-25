@@ -1,4 +1,4 @@
-import unittest
+from better_test.compat import unittest
 
 from better_test import core
 from better_test.parallel import SilentMultiProcessingTextTestResult
