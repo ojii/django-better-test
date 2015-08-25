@@ -1,3 +1,6 @@
+import sys
+import signal
+
 from better_test.compat import unittest
 
 from better_test import core
@@ -22,4 +25,9 @@ class TestCrashingExecutors(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertEqual(len(result.failed_executors), 1)
         _, exit_code = result.failed_executors[0]
-        self.assertEqual(exit_code, -11)
+        if sys.platform == 'linux':
+            self.assertEqual(exit_code, -signal.SIGSEGV)
+        elif sys.platform == 'darwin':
+            self.assertEqual(exit_code, -signal.SIGILL)
+        elif sys.platform == 'win32':
+            self.assertEqual(exit_code, 3221225477)
