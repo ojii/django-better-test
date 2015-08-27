@@ -118,6 +118,7 @@ def get_config(database, options, test_labels):
         mode=mode,
         timings=database.get('timings', {}),
         processes=multiprocessing.cpu_count(),
+        verbosity=int(options['verbosity']),
     )
 
 

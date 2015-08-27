@@ -48,11 +48,13 @@ class Result(object):
 
 
 class Config(object):
-    def __init__(self, test_runner_class, mode, timings, processes, debug=False):
+    def __init__(self, test_runner_class, mode, timings, processes,
+                 verbosity=1, debug=False):
         self.test_runner_class = test_runner_class
         self.mode = mode
         self.timings = timings
         self.processes = processes
+        self.verbosity = verbosity
         self.debug = debug
 
 
@@ -64,7 +66,8 @@ def run(test_labels, test_runner_options, config,
 
     # Get an actual result class we can use
     pseudo_runner = unittest.TextTestRunner(
-        resultclass=real_result_class
+        resultclass=real_result_class,
+        verbosity=config.verbosity,
     )
     real_result = pseudo_runner._makeResult()
 

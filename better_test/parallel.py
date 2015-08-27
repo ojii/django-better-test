@@ -131,29 +131,6 @@ class MultiProcessingTextTestResult(unittest.TextTestResult):
         self.timings = {}
         self.successes = []
 
-    @property
-    def testsRun(self):
-        """
-        Usually incremented via startTest, but we don't call that function, so
-        we simply introspect all results we have.
-        """
-        return sum(map(len, (
-            self.errors,
-            self.failures,
-            self.unexpectedSuccesses,
-            self.expectedFailures,
-            self.successes,
-            self.skipped
-        )))
-
-    @testsRun.setter
-    def testsRun(self, value):
-        """
-        The super class sets/increments this value in some functions, so for
-        simplicity we allow setting it and just discard the value.
-        """
-        pass
-
     def registerTiming(self, test, timing):
         self.timings[test.qualname] = timing
 
@@ -206,6 +183,11 @@ class MultiProcessingTestResult(unittest.TestResult):
 
     def startTest(self, test):
         self._timings[test] = time.time()
+        self._results_queue.put((
+            'startTest', (
+                serialize(test),
+            )
+        ))
 
     def _setupStdout(self):
         pass
