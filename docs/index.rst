@@ -6,10 +6,15 @@
 Welcome to django-better-test's documentation!
 ==============================================
 
-Contents:
+
+better-test is a Django library that provides a more powerful ``test`` command
+for your Django project, with a focus on making large test suites run faster.
 
 .. toctree::
    :maxdepth: 2
+
+   introduction
+   differences
 
 
 
