@@ -6,7 +6,8 @@ Introduction
 Installation
 ************
 
-Add ``better_test`` to your ``INSTALLED_APPS``.
+After installing better-test into your virtualenv, add ``better_test`` to your
+``INSTALLED_APPS``.
 
 
 Usage
@@ -14,9 +15,7 @@ Usage
 
 You can invoke better-test like you would your standard Django test command
 using ``python manage.py test``. You may pass a list of tests, test modules or
-test classes to run, for example ``python manage.py test
-myapp.tests.test_module`` or ``python manage.py test
-myapp.tests.test_module.TestClass.test_method``.
+test classes to run, just like with your normal Django test command.
 
 
 .. _parallel:
@@ -52,10 +51,10 @@ This flag cannot be used together with ``--parallel``.
 Re-runs all the tests that failed or errored in the last test run.
 
 
-.. _retests:
+.. _retest:
 
-``--restest``
-=============
+``--retest``
+============
 
 Re-runs the tests using the same configuration used in the last run.
 
