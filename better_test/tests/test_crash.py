@@ -1,5 +1,4 @@
 import contextlib
-import subprocess
 import sys
 import signal
 
@@ -10,6 +9,8 @@ from better_test.parallel import SilentMultiProcessingTextTestResult
 from better_test.utils import get_test_runner
 
 if sys.platform == 'darwin':
+    import subprocess
+
     @contextlib.contextmanager
     def no_report_crash():
         subprocess.check_call([
@@ -27,6 +28,21 @@ if sys.platform == 'darwin':
                 '-w',
                 '/System/Library/LaunchAgents/com.apple.ReportCrash.plist'
             ])
+elif sys.platform == 'win32':
+    import ctypes
+    SEM_FAILCRITICALERRORS = 0x0001
+    SEM_NOGPFAULTERRORBOX = 0x0002
+
+    @contextlib.contextmanager
+    def no_report_crash():
+        old_mode = ctypes.windll.kernel32.GetErrorMode()
+        ctypes.windll.kernel32.SetErrorMode(
+            SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX
+        )
+        try:
+            yield
+        finally:
+            ctypes.windll.kernel32.SetErrorMode(old_mode)
 else:
     @contextlib.contextmanager
     def no_report_crash():
