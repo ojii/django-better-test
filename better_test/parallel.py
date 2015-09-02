@@ -9,6 +9,25 @@ from better_test.utils import null_stdout
 from better_test.utils import serialize
 
 
+try:
+    from coverage.collector import Collector
+    from coverage.control import coverage
+    if Collector._collectors:
+        class Process(multiprocessing.Process):
+            def _bootstrap(self):
+                cov = coverage(data_suffix=True)
+                cov.start()
+                try:
+                    return multiprocessing.Process._bootstrap(self)
+                finally:
+                    cov.stop()
+                    cov.save()
+    else:
+        Process = multiprocessing.Process
+except ImportError:
+    Process = multiprocessing.Process
+
+
 class Pool(object):
     def __init__(self, real_result, max_processes=multiprocessing.cpu_count()):
         self.real_result = real_result
@@ -23,7 +42,7 @@ class Pool(object):
             while len(self.processes) >= self.max_processes:
                 self.handle_results()
             chunk = chunks.pop()
-            process = multiprocessing.Process(
+            process = Process(
                 target=executor,
                 args=(
                     chunk,
