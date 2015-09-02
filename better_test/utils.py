@@ -97,3 +97,11 @@ def get_test_runner(name=None):
     from django.test.utils import get_runner
 
     return get_runner(settings, name)
+
+
+def get_settings_dict():
+    from django.conf import settings
+    return dict(
+        (key, getattr(settings, key)) for key in dir(settings)
+        if key.upper() == key
+    )

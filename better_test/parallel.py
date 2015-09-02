@@ -7,6 +7,7 @@ from better_test.compat import unittest
 from better_test.compat import PY_26
 from better_test.utils import null_stdout
 from better_test.utils import serialize
+from better_test.utils import get_settings_dict
 
 
 try:
@@ -37,6 +38,7 @@ class Pool(object):
         self.failed_executors = []
 
     def run(self, chunks, runner_class, runner_options):
+        settings_dict = get_settings_dict()
         chunk_num = 0
         while chunks:
             while len(self.processes) >= self.max_processes:
@@ -49,7 +51,8 @@ class Pool(object):
                     runner_class,
                     runner_options,
                     chunk_num,
-                    self.results
+                    self.results,
+                    settings_dict
                 )
             )
             process.start()
@@ -110,7 +113,7 @@ def multi_processing_runner_factory(stream, results):
     return inner
 
 
-def executor(labels, runner_class, runner_options, chunk_num, results):
+def executor(labels, runner_class, runner_options, chunk_num, results, conf):
     """
     Test runner inside the task process.
     """
@@ -118,6 +121,10 @@ def executor(labels, runner_class, runner_options, chunk_num, results):
     # mode (or any other mode with more than one chunk). But if there's only
     # a single chunk, don't change the db name. Therefore we don't modify the
     # name for the first chunk (chunk_num=0).
+    if not settings.configured:
+        import django
+        settings.configure(**conf)
+        django.setup()
     if chunk_num:
         for config in settings.DATABASES.values():
             if config.get('NAME', None) != ':memory:':
