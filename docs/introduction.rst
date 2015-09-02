@@ -3,6 +3,20 @@ Introduction
 ############
 
 
+Compatibility
+*************
+
+Python
+======
+
+2.6, 2.7, 3.3 and 3.4 are supported.
+
+Django
+======
+
+1.6, 1.7 and 1.8 are supported.
+
+
 Installation
 ************
 
