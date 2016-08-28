@@ -2,12 +2,12 @@ from better_test.compat import unittest
 
 
 class IsolateTests(unittest.TestCase):
-    state = 1
+    state = 0
 
     def test_one(self):
-        IsolateTests.state += 1
+        IsolateTests.state += 2
         self.assertEqual(IsolateTests.state, 2)
 
     def test_two(self):
-        IsolateTests.state += 1
-        self.assertEqual(IsolateTests.state, 2)
+        IsolateTests.state += 20
+        self.assertEqual(IsolateTests.state, 20)
