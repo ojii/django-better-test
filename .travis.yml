@@ -20,3 +20,10 @@ install:
 script: python manage.py test
 
 sudo: false
+
+matrix:
+  exclude:
+    - python: 3.5
+      env: DJANGO='django>=1.6,<1.7'
+    - python: 3.5
+      env: DJANGO='django>=1.7,<1.8'
