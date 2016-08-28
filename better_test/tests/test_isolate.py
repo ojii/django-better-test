@@ -19,7 +19,7 @@ class IsolationTests(unittest.TestCase):
             ),
             real_result_class=SilentMultiProcessingTextTestResult
         )
-        self.assertTrue(result.success)
+        self.assertTrue(result.success, (result.failures, result.errors))
         self.assertEqual(len(result.successes), 2)
 
     def test_state_leak(self):
@@ -35,6 +35,6 @@ class IsolationTests(unittest.TestCase):
             ),
             real_result_class=SilentMultiProcessingTextTestResult
         )
-        self.assertFalse(result.success)
+        self.assertFalse(result.success, (result.failures, result.errors))
         self.assertEqual(len(result.successes), 1)
         self.assertEqual(len(result.failures), 1)
