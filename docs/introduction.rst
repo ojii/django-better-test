@@ -9,12 +9,12 @@ Compatibility
 Python
 ======
 
-2.6, 2.7, 3.3 and 3.4 are supported.
+2.7, 3.3, 3.4 and 3.5 are supported.
 
 Django
 ======
 
-1.6, 1.7 and 1.8 are supported.
+1.6, 1.7, 1.8, 1.9 and 1.10 are supported.
 
 
 Installation

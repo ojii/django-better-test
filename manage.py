@@ -1,4 +1,7 @@
-from django.conf.urls import patterns
+try:
+    from django.conf.urls import patterns
+except ImportError:
+    patterns = lambda x: []
 
 import app_manage
 
@@ -12,3 +15,4 @@ if __name__ == '__main__':
         ),
         ROOT_URLCONF='manage',
     )
+

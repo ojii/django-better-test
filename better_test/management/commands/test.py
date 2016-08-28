@@ -22,33 +22,46 @@ SEPARATOR_1 = '=' * 70
 SEPARATOR_2 = '-' * 70
 
 
-class Command(DjangoTest):
-    option_list = DjangoTest.option_list + (
-        make_option('--parallel',
+def args_builder(factory, parallel=True):
+    args = []
+    if parallel:
+        args.append(factory(
+            '--parallel',
             action='store_true', dest='parallel', default=False,
-            help='Run tests in parallel.'),
-        make_option('--isolate',
-            action='store_true', dest='isolate', default=False,
-            help='Run each test isolated.'),
-        make_option('--failed',
-            action='store_true', dest='failed', default=False,
-            help='Re-run tests that failed the last time.'),
-        make_option('--list-slow',
-            type=int, dest='list_slow', default=0,
-            help='Amount of slow tests to print.'),
-        make_option('--retest',
-            action='store_true', dest='retest', default=False,
-            help='Re-run the tests using the last configuration.'),
-        make_option('--vanilla',
-            action='store_true', dest='vanilla', default=False,
-            help='Ignore better test.'),
-        make_option('--no-migrations',
-            action='store_true', dest='no_migrate', default=False,
-            help='Do not run migrations'),
-        make_option('--migrate',
-            action='store_true', dest='migrate', default=False,
-            help='Run migrations (slow)'),
-    )
+            help='Run tests in parallel.'
+        ))
+    return args + [
+        factory('--isolate',
+                action='store_true', dest='isolate', default=False,
+                help='Run each test isolated.'),
+        factory('--failed',
+                action='store_true', dest='failed', default=False,
+                help='Re-run tests that failed the last time.'),
+        factory('--list-slow',
+                type=int, dest='list_slow', default=0,
+                help='Amount of slow tests to print.'),
+        factory('--retest',
+                action='store_true', dest='retest', default=False,
+                help='Re-run the tests using the last configuration.'),
+        factory('--vanilla',
+                action='store_true', dest='vanilla', default=False,
+                help='Ignore better test.'),
+        factory('--no-migrations',
+                action='store_true', dest='no_migrate', default=False,
+                help='Do not run migrations'),
+        factory('--migrate',
+                action='store_true', dest='migrate', default=False,
+                help='Run migrations (slow)'),
+    ]
+
+
+class Command(DjangoTest):
+    if hasattr(DjangoTest, 'option_list'):
+        option_list = DjangoTest.option_list + args_builder(make_option)
+
+    def add_arguments(self, parser):
+        super(Command, self).add_arguments(parser)
+        args_builder(parser.add_argument, False)
 
     def handle(self, *test_labels, **options):
         from django.conf import settings
@@ -84,6 +97,7 @@ def get_test_runner_options(options):
     Build the options for the test runner class.
     """
     test_runner_options = dict(options.items())
+    del test_runner_options['parallel']
     test_runner_options['verbosity'] = int(test_runner_options['verbosity'])
     test_runner_options['interactive'] = False
     return test_runner_options

@@ -1,9 +1,9 @@
 from better_test.database import read_database
-from django.core.management.base import NoArgsCommand
+from django.core.management.base import BaseCommand
 
 
-class Command(NoArgsCommand):
-    def handle_noargs(self, **options):
+class Command(BaseCommand):
+    def handle(self, *args, **options):
         database = read_database()
         if not database:
             self.stdout.write("No database found\n")
