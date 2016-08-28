@@ -57,7 +57,7 @@ def args_builder(factory, parallel=True):
 
 class Command(DjangoTest):
     if hasattr(DjangoTest, 'option_list'):
-        option_list = DjangoTest.option_list + args_builder(make_option)
+        option_list = DjangoTest.option_list + tuple(args_builder(make_option))
 
     def add_arguments(self, parser):
         super(Command, self).add_arguments(parser)
