@@ -1,5 +1,8 @@
-from better_test.database import read_database
+from __future__ import absolute_import
+
 from django.core.management.base import BaseCommand
+
+from ...database import read_database
 
 
 class Command(BaseCommand):

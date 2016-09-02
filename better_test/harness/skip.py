@@ -1,4 +1,6 @@
-from better_test.compat import unittest
+from __future__ import absolute_import
+
+from ..compat import unittest
 
 
 class SkipTests(unittest.TestCase):

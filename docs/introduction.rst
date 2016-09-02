@@ -96,3 +96,14 @@ After the test run, list the ``<number>`` slowest tests.
 
 Bypass better-test and use the standard Django test command. You cannot use any
 of the arguments mentioned above if you use ``--vanilla``.
+
+.. _start_method:
+
+``--start-method``
+==================
+
+.. versionadded:: 0.10
+
+Start method to use for multiprocessing. Defaults to ``spawn``. Available
+choices: ``spawn``, ``fork``, ``forkserver``. Refer to the Python documentation
+for the differences.

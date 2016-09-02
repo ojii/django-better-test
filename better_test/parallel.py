@@ -1,13 +1,15 @@
+from __future__ import absolute_import
+
 import time
 import multiprocessing
 
 from django.conf import settings
 
-from better_test.compat import unittest
-from better_test.compat import PY_26
-from better_test.utils import null_stdout
-from better_test.utils import serialize
-from better_test.utils import get_settings_dict
+from .compat import unittest
+from .compat import PY_26
+from .utils import null_stdout
+from .utils import serialize
+from .utils import get_settings_dict
 
 
 try:
@@ -30,11 +32,13 @@ except ImportError:
 
 
 class Pool(object):
-    def __init__(self, real_result, max_processes=multiprocessing.cpu_count()):
+    def __init__(self, real_result, max_processes=multiprocessing.cpu_count(),
+                 start_method='spawn'):
         self.real_result = real_result
         self.max_processes = max_processes
         self.processes = []
-        self.results = multiprocessing.Queue()
+        self.context = multiprocessing.get_context(start_method)
+        self.results = self.context.Queue()
         self.failed_executors = []
 
     def run(self, chunks, runner_class, runner_options):
@@ -44,7 +48,7 @@ class Pool(object):
             while len(self.processes) >= self.max_processes:
                 self.handle_results()
             chunk = chunks.pop()
-            process = Process(
+            process = self.context.Process(
                 target=executor,
                 args=(
                     chunk,

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from optparse import make_option
 import os
 import multiprocessing
@@ -8,14 +9,14 @@ import warnings
 from django.core.management.commands.test import Command as DjangoTest
 from django.conf import settings
 
-from better_test.database import read_database
-from better_test.utils import DisableMigrations
-from better_test.utils import get_test_runner
-from better_test.core import Config
-from better_test.core import run
-from better_test.core import ISOLATED
-from better_test.core import PARALLEL
-from better_test.core import STANDARD
+from ...database import read_database
+from ...utils import DisableMigrations
+from ...utils import get_test_runner
+from ...core import Config
+from ...core import run
+from ...core import ISOLATED
+from ...core import PARALLEL
+from ...core import STANDARD
 
 
 SEPARATOR_1 = '=' * 70
@@ -52,6 +53,9 @@ def args_builder(factory, parallel=True):
         factory('--migrate',
                 action='store_true', dest='migrate', default=False,
                 help='Run migrations (slow)'),
+        factory('--start-method', dest='start_method', default='spawn',
+                help='Select multiprocessing spawn method',
+                choices=['fork', 'spawn', 'forkserver'])
     ]
 
 
@@ -133,6 +137,7 @@ def get_config(database, options, test_labels):
         timings=database.get('timings', {}),
         processes=multiprocessing.cpu_count(),
         verbosity=int(options['verbosity']),
+        start_method=options['start_method']
     )
 
 

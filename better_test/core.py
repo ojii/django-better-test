@@ -1,10 +1,11 @@
+from __future__ import absolute_import
 import time
 
-from better_test.parallel import Pool
-from better_test.parallel import MultiProcessingTextTestResult
-from better_test.utils import suite_to_labels
-from better_test.utils import simple_weighted_partition
-from better_test.compat import unittest
+from .parallel import Pool
+from .parallel import MultiProcessingTextTestResult
+from .utils import suite_to_labels
+from .utils import simple_weighted_partition
+from .compat import unittest
 
 ISOLATED = 1
 PARALLEL = 2
@@ -28,6 +29,18 @@ class Result(object):
         self.test_labels = test_labels
 
     @property
+    def total_results(self):
+        return sum(map(len, (
+            self.failures,
+            self.errors,
+            self.skipped,
+            self.expected_failures,
+            self.unexpected_successes,
+            self.failed_executors,
+            self.successes,
+        )))
+
+    @property
     def success(self):
         return not any((
             self.unexpected_successes,
@@ -49,13 +62,14 @@ class Result(object):
 
 class Config(object):
     def __init__(self, test_runner_class, mode, timings, processes,
-                 verbosity=1, debug=False):
+                 verbosity=1, debug=False, start_method='spawn'):
         self.test_runner_class = test_runner_class
         self.mode = mode
         self.timings = timings
         self.processes = processes
         self.verbosity = verbosity
         self.debug = debug
+        self.start_method = start_method
 
 
 def run(test_labels, test_runner_options, config,
@@ -97,7 +111,7 @@ def run(test_labels, test_runner_options, config,
         raise ValueError("Unknown mode: {0}".format(config.mode))
 
     start_time = time.time()
-    pool = Pool(real_result, config.processes)
+    pool = Pool(real_result, config.processes, config.start_method)
     failed_executors = pool.run(
         chunks,
         config.test_runner_class,
