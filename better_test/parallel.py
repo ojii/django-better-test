@@ -3,8 +3,6 @@ from __future__ import absolute_import
 import time
 import multiprocessing
 
-from django.conf import settings
-
 from .compat import unittest
 from .compat import PY_26
 from .compat import get_multiprocessing_context
@@ -129,6 +127,7 @@ def executor(labels, runner_class, runner_options, chunk_num, results, conf):
     # mode (or any other mode with more than one chunk). But if there's only
     # a single chunk, don't change the db name. Therefore we don't modify the
     # name for the first chunk (chunk_num=0).
+    from django.conf import settings
     if not settings.configured:
         import django
         settings.configure(**conf)
