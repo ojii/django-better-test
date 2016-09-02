@@ -1,4 +1,5 @@
 import sys
+import multiprocessing
 
 try:
     import queue
@@ -12,3 +13,9 @@ if PY_26:
     from django.utils import unittest
 else:
     import unittest
+
+
+try:
+    get_multiprocessing_context = multiprocessing.get_context
+except AttributeError:
+    get_multiprocessing_context = lambda method: multiprocessing

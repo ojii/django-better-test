@@ -21,6 +21,9 @@ script: python manage.py test
 
 sudo: false
 
+notifications:
+  email: false
+
 matrix:
   exclude:
     - python: 3.5

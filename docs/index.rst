@@ -15,6 +15,7 @@ for your Django project, with a focus on making large test suites run faster.
 
    introduction
    differences
+   changelog
 
 
 

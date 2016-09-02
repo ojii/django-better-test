@@ -7,6 +7,7 @@ from django.conf import settings
 
 from .compat import unittest
 from .compat import PY_26
+from .compat import get_multiprocessing_context
 from .utils import null_stdout
 from .utils import serialize
 from .utils import get_settings_dict
@@ -16,19 +17,22 @@ try:
     from coverage.collector import Collector
     from coverage.control import coverage
     if Collector._collectors:
-        class Process(multiprocessing.Process):
-            def _bootstrap(self):
-                cov = coverage(data_suffix=True)
-                cov.start()
-                try:
-                    return multiprocessing.Process._bootstrap(self)
-                finally:
-                    cov.stop()
-                    cov.save()
+        def mixin_coverage(cls):
+            original = cls._bootstrap
+            class Process(cls):
+                def _bootstrap(self):
+                    cov = coverage(data_suffix=True)
+                    cov.start()
+                    try:
+                        return original(self)
+                    finally:
+                        cov.stop()
+                        cov.save()
+            return Process
     else:
-        Process = multiprocessing.Process
+        mixin_coverage = lambda cls: cls
 except ImportError:
-    Process = multiprocessing.Process
+    mixin_coverage = lambda cls: cls
 
 
 class Pool(object):
@@ -37,7 +41,7 @@ class Pool(object):
         self.real_result = real_result
         self.max_processes = max_processes
         self.processes = []
-        self.context = multiprocessing.get_context(start_method)
+        self.context = get_multiprocessing_context(start_method)
         self.results = self.context.Queue()
         self.failed_executors = []
 
@@ -48,7 +52,7 @@ class Pool(object):
             while len(self.processes) >= self.max_processes:
                 self.handle_results()
             chunk = chunks.pop()
-            process = self.context.Process(
+            process = mixin_coverage(self.context.Process)(
                 target=executor,
                 args=(
                     chunk,
