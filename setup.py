@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='django-better-test',
-    version='0.9',
+    version='0.10',
     description='A better test command for Django',
     url='https://github.com/ojii/django-better-test',
     author='Jonas Obrist',
@@ -22,6 +22,6 @@ setup(
     ],
     packages=find_packages(),
     install_requires=[
-        'Django>=1.6',
+        'Django>=1.7',
     ],
 )
