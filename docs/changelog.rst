@@ -11,7 +11,7 @@ Changelog
 * Added support for Django 1.10
 * Added :ref:`start_method` option (Python 3.4, 3.5 only)
 * Removed support for Python 2.6
-* Removed support for Django 1.7
+* Removed support for Django 1.6
 * Deprecated support for Python 2.7
 * Deprecated support for Python 3.3
 
